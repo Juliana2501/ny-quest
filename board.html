@@ -54,7 +54,9 @@ td button{padding:2px 9px;font-size:14px}
   <div class="row" style="justify-content:center">
     <button id="bt">Запустить таймер</button>
     <button class="go" id="bc">Начать церемонию сейчас</button>
+    <button id="bd">Пробная церемония</button>
   </div>
+  <div id="note" style="text-align:center;min-height:28px;color:var(--gold);font-size:20px"></div>
   <section class="hero">
     <div class="qrcard"><div id="qr" class="qr"></div><div class="tiny" id="lk"></div></div>
     <div class="herotxt">
@@ -62,6 +64,7 @@ td button{padding:2px 9px;font-size:14px}
       <p>Откроется квест, ничего устанавливать не нужно. Ответь на вопросы, и твой результат сам появится на этом экране.</p>
     </div>
   </section>
+  <div id="conn" style="font-size:16px;opacity:.7;text-align:center">подключаюсь…</div>
   <h2>Рейтинг: прошли <span id="n">0</span></h2>
   <table id="tb"></table>
   <details style="margin-top:20px"><summary>Запасной ввод кода вручную</summary>
@@ -104,9 +107,9 @@ const joinUrl=new URL("index.html?room="+room,here?location.href:SITE).href;
 $("lk").textContent=joinUrl.replace(/^https?:\/\//,"");
 try{new QRCode($("qr"),{text:joinUrl,width:280,height:280,correctLevel:QRCode.CorrectLevel.L})}catch(e){$("qr").style.display="none"}
 
-function assign(){
-  const secs=R.map(r=>r.secs).sort((a,b)=>a-b),m=secs.length?secs[Math.floor(secs.length/2)]:0;
-  const left=R.slice(),out=new Map(),order=[];
+function assign(L=R){
+  const secs=L.map(r=>r.secs).sort((a,b)=>a-b),m=secs.length?secs[Math.floor(secs.length/2)]:0;
+  const left=L.slice(),out=new Map(),order=[];
   for(const [ic,t,f] of AW){
     if(!left.length)break;
     let best=null,bs=-Infinity;
@@ -142,12 +145,24 @@ function parse(s){
   return null;
 }
 
-// приём результатов с телефонов
+// приём результатов с телефонов: живое соединение + опрос каждые 3 секунды (на случай, если соединение молчит)
+const TOPIC="https://ntfy.sh/ny-quest-"+encodeURIComponent(room);
+const seen=new Set();
+function takeLine(line){
+  if(!line||!line.trim())return;
+  try{const m=JSON.parse(line);if(m.event!=="message"||seen.has(m.id))return;seen.add(m.id);addResult(parse(m.message))}catch(x){}
+}
+async function poll(){
+  try{
+    const r=await fetch(TOPIC+"/json?poll=1&since=all",{cache:"no-store"});
+    if(!r.ok)throw 0;
+    (await r.text()).split("\n").forEach(takeLine);
+    $("conn").textContent="● на связи, результаты приходят сами";
+  }catch(e){$("conn").textContent="● нет связи, пробую снова…"}
+}
 function connect(){
-  const es=new EventSource("https://ntfy.sh/ny-quest-"+encodeURIComponent(room)+"/sse?since=all");
-  es.onopen=()=>{$("conn").textContent="● на связи, результаты приходят сами"};
-  es.onerror=()=>{$("conn").textContent="● нет связи, пробую переподключиться…"};
-  es.onmessage=e=>{try{const m=JSON.parse(e.data);if(m.event==="message")addResult(parse(m.message))}catch(x){}};
+  try{const es=new EventSource(TOPIC+"/sse?since=all");es.onmessage=e=>takeLine(e.data)}catch(e){}
+  poll();setInterval(poll,3000);
 }
 connect();
 
@@ -169,9 +184,12 @@ $("bt").onclick=()=>{
 };
 
 // церемония: у каждого участника свой экран с плашкой
-function ceremony(){
-  if(!R.length)return;
-  const {out,order}=assign();
+const DEMO=[["Аня",8,2,2,150,1],["Макс",5,4,3,95,0],["Лиза",9,1,2,240,1],["Дима",3,7,2,180,0],["Катя",6,3,3,120,0],["Олег",4,2,6,300,0],["Саша",7,3,2,170,0]].map(a=>({name:a[0],ok:a[1],fun:a[2],n:a[3],secs:a[4],win:!!a[5],text:a[5]?"Дело раскрыто! Подарок украл Снеговик и спрятал его в сугробе.":"По вашей версии, подарок украл кот Барсик."}));
+function ceremony(demo){
+  const L=demo===true?DEMO:R;
+  if(!L.length){$("note").textContent="Пока нет результатов. Пусть хотя бы один участник пройдёт квест, или нажмите «Пробная церемония».";return}
+  $("note").textContent="";
+  const {out,order}=assign(L);
   const st=document.createElement("div");st.className="stage";document.body.appendChild(st);
   let s=0;
   const close=()=>{st.remove();document.removeEventListener("keydown",key)};
@@ -189,7 +207,8 @@ function ceremony(){
   function key(e){if(e.key==="Escape")close();else if([" ","Enter","ArrowRight"].includes(e.key)){e.preventDefault();next()}}
   st.onclick=next;document.addEventListener("keydown",key);draw();
 }
-$("bc").onclick=ceremony;
+$("bc").onclick=()=>ceremony();
+$("bd").onclick=()=>ceremony(true);
 
 for(let n=0;n<30;n++){const f=document.createElement("span");f.className="flake";f.textContent="❄";
   f.style.left=Math.random()*100+"vw";f.style.fontSize=12+Math.random()*20+"px";
