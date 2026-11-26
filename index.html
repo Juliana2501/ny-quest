@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Операция «Новый год под угрозой»</title>
+<style>
+:root{--gold:#ffd166;--red:#e63946;--snow:#f4f9ff}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:linear-gradient(#0b1d3a,#17365f);color:var(--snow);font:17px/1.45 "Trebuchet MS",system-ui,sans-serif;display:flex;justify-content:center}
+main{width:100%;max-width:480px;padding:24px 18px 40px;position:relative;z-index:2}
+h1,h2{font-family:Georgia,serif;margin:.3em 0;line-height:1.2}
+h1{font-size:30px;color:var(--gold)}
+h2{font-size:23px}
+.tree{font-size:76px;text-align:center;filter:grayscale(1) brightness(.55);transition:filter .8s}
+.tree.on{filter:none;animation:glow 2s infinite alternate}
+@keyframes glow{to{filter:drop-shadow(0 0 18px var(--gold))}}
+button,input{font:inherit;width:100%;padding:14px 16px;border-radius:14px;border:2px solid #3b5f95;background:#0f2a50;color:var(--snow);margin-top:10px;text-align:left}
+button{cursor:pointer}
+button:hover,button:focus-visible,input:focus{border-color:var(--gold);outline:none}
+button.go{background:var(--red);border-color:var(--red);text-align:center;font-weight:bold}
+.bar{height:6px;background:#0f2a50;border-radius:3px;margin-bottom:18px}
+.bar i{display:block;height:100%;background:var(--gold);border-radius:3px;transition:width .4s}
+.meta{display:flex;justify-content:space-between;font-size:14px;opacity:.8;margin-bottom:8px}
+.st{padding:10px 14px;border-radius:12px;background:#0f2a50;margin:12px 0}
+.code{font:13px monospace;word-break:break-all;user-select:all;background:#0f2a50;padding:10px;border-radius:10px}
+.flake{position:fixed;top:-20px;color:#fff;opacity:.8;animation:fall linear infinite;pointer-events:none;z-index:1}
+@keyframes fall{to{transform:translateY(110vh)}}
+@media (prefers-reduced-motion:reduce){.flake{display:none}.tree.on{animation:none}}
+</style>
+</head>
+<body>
+<main id="app"></main>
+<script>
+// [вопрос, [[вариант, тип], ...]]  тип: r — верный, f — смешной, n — нейтральный
+const Q=[
+["Вы на месте преступления: ёлка не светится, под ней пусто. С чего начнёте?",[
+ ["Осмотрю пол: рядом с ёлкой видны мокрые круглые следы","r"],
+ ["Проверю, не спрятал ли подарок кто-то из гостей: у всех слишком довольные лица","f"],
+ ["Проверю розетку и гирлянду","n"]]],
+["В коридоре на подоконнике лужа. Откуда она?",[
+ ["Кто-то принёс с улицы снег, и он растаял","r"],
+ ["Вор пролил чай, пока нёс подарок","f"],
+ ["Наверное, течёт батарея","n"]]],
+["Окно в комнате приоткрыто. Что это говорит о воре?",[
+ ["Он пришёл с мороза и ушёл туда же: холод ему привычен","r"],
+ ["Он решил проветрить комнату перед кражей: воспитанный человек","f"],
+ ["Окно просто забыли закрыть","n"]]],
+["Кого опросите первым?",[
+ ["Дворника: он всю ночь чистил двор","r"],
+ ["Бабушку с первого этажа: она следит за подъездом лучше любой камеры","f"],
+ ["Курьера, который как раз заходит в подъезд","n"]]],
+["Дворник говорит: «Вчера во дворе стояло три снежные фигуры, а сегодня две». Что уточните?",[
+ ["Какой именно фигуры не хватает","r"],
+ ["Не ушла ли вместе с ней и вся компания на хоровод","f"],
+ ["Кто их лепил","n"]]],
+["У подъезда лежит оранжевый кусочек. Что это?",[
+ ["Похоже на морковку: такой нос обычно втыкают в снеговика","r"],
+ ["Корка мандарина: вор подкреплялся по дороге","f"],
+ ["Просто мусор, идём дальше","n"]]],
+["Рядом лежит чёрная круглая пуговица. Что думаете?",[
+ ["Похожа на уголёк, которым делают глаза снеговику","r"],
+ ["Это пуговица с шубы Деда Мороза: значит, он был здесь","f"],
+ ["Пуговица от чьей-то куртки","n"]]],
+["Следы уходят во двор и расходятся в три стороны. Куда идёте?",[
+ ["Туда, где вчера вечером лепили снеговика","r"],
+ ["К магазину: вор мог зайти за добавкой мандаринов","f"],
+ ["К гаражам","n"]]],
+["Камера домофона записала размытую белую фигуру. Что замечаете?",[
+ ["Фигура очень круглая и идёт вперевалку","r"],
+ ["Это Дед Мороз в белой шубе: наверное, забрал подарок на проверку","f"],
+ ["Подожду, пока изображение станет чётче","n"]]],
+["Зачем красть главный подарок?",[
+ ["Ему стало одиноко: все веселились, а он стоял во дворе один","r"],
+ ["Хотел пополнить коллекцию носков","f"],
+ ["Хотел продать его на барахолке","n"]]],
+["Во дворе пусто, только валяется ведро. Что это значит?",[
+ ["Это головной убор пропавшего снеговика: он ушёл сам","r"],
+ ["Ведро унёс сообщник, значит, их было двое","f"],
+ ["Ведро ничего не значит","n"]]],
+["Последний шаг: где искать подарок?",[
+ ["В сугробе у забора, куда ведут круглые следы","r"],
+ ["В холодильнике: все праздничные секреты хранятся там","f"],
+ ["На балконе у соседей","n"]]]
+];
+const NEED=8; // сколько верных нужно для настоящей разгадки
+const FIN_OK="Дело раскрыто! Подарок украл Снеговик: ему стало одиноко, и он утащил коробку в свой сугроб у забора. Ёлка снова горит.";
+const FUN=[
+"По вашей версии, подарок украл кот Барсик. Он спрятал его в рулоне туалетной бумаги и до сих пор делает вид, что ничего не знает.",
+"По вашей версии, вор — Дед Мороз. Он решил провести инвентаризацию и забыл вернуть коробку на место.",
+"По вашей версии, подарок съели вместе с оливье. Следствие продолжается, свидетели ещё жуют.",
+"По вашей версии, виноват холодильник. Он давно искал повод стать главным героем праздника.",
+"По вашей версии, подарок украла тётя Люда. Она всё видела, но рассказывает только по субботам.",
+"По вашей версии, подарок унёс сосед сверху. Он говорит, что просто одолжил его до 31-го.",
+"По вашей версии, подарок не пропадал: его переложили в такое место, которое никто не вспомнит до апреля.",
+"По вашей версии, виновата ёлка. Она устала стоять и ушла из дома вместе с гирляндой.",
+"По вашей версии, подарок забрали мандарины. Они организовались и требуют признания.",
+"По вашей версии, вор — вы сами. Вы взяли подарок ещё вчера, чтобы проверить, как он упакован.",
+"По вашей версии, подарок увёз в отпуск пингвин. Открытки обещал присылать каждую неделю.",
+"По вашей версии, подарок украли ёлочные шары. Они катятся к границе, и догнать их пока не удалось."
+];
+const room=new URLSearchParams(location.search).get("room");
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const app=document.getElementById("app");
+let name="",i=0,ok=0,fun=0,t0=0,tick=null;
+
+function shuffle(a){a=a.slice();for(let k=a.length-1;k>0;k--){const j=Math.floor(Math.random()*(k+1));[a[k],a[j]]=[a[j],a[k]]}return a}
+const fmt=s=>Math.floor(s/60)+":"+String(s%60).padStart(2,"0");
+
+function home(){
+  app.innerHTML=`<div class="tree">🎄</div>
+  <h1>Операция «Новый год под угрозой»</h1>
+  <p>Ночью украли главный подарок, а ёлка перестала светиться. Вы — детектив. В квесте ${Q.length} вопросов. Подсказок нет, ответы не проверяются до самого конца.</p>
+  ${room?"":`<div class="st">Ссылка без номера комнаты: результат не уйдёт на табло сам. Откройте ссылку, которую показывает табло.</div>`}
+  <input id="nm" placeholder="Ваше имя" maxlength="20" autocomplete="off">
+  <button class="go" id="st">Начать расследование</button>`;
+  document.getElementById("st").onclick=()=>{
+    const v=document.getElementById("nm").value.trim();
+    if(!v){document.getElementById("nm").focus();return}
+    name=v;i=0;ok=0;fun=0;t0=Date.now();
+    tick=setInterval(()=>{const e=document.getElementById("tm");if(e)e.textContent=fmt(Math.round((Date.now()-t0)/1000))},1000);
+    ask();
+  };
+}
+
+function ask(){
+  const [q,opts]=Q[i];
+  app.innerHTML=`<div class="meta"><span>Вопрос ${i+1} из ${Q.length}</span><span id="tm">${fmt(Math.round((Date.now()-t0)/1000))}</span></div>
+  <div class="bar"><i style="width:${i/Q.length*100}%"></i></div>
+  <h2>${esc(q)}</h2>
+  ${shuffle(opts).map(o=>`<button data-t="${o[1]}">${esc(o[0])}</button>`).join("")}`;
+  app.querySelectorAll("button").forEach(b=>b.onclick=()=>{
+    if(b.dataset.t==="r")ok++;else if(b.dataset.t==="f")fun++;
+    i++; i<Q.length?ask():end();
+  });
+}
+
+async function send(p){
+  for(let k=0;k<3;k++){
+    try{const r=await fetch("https://ntfy.sh/ny-quest-"+encodeURIComponent(room),{method:"POST",body:JSON.stringify(p)});if(r.ok)return true}catch(e){}
+    await new Promise(s=>setTimeout(s,1500));
+  }
+  return false;
+}
+
+function end(){
+  clearInterval(tick);
+  const secs=Math.round((Date.now()-t0)/1000);
+  const win=ok>=NEED;
+  const text=win?FIN_OK:FUN[(fun*3+ok+name.length)%FUN.length];
+  const p={name:name.slice(0,20),ok,fun,n:Q.length-ok-fun,secs,win,text};
+  const code=btoa(unescape(encodeURIComponent(JSON.stringify(p))));
+  app.innerHTML=`<div class="tree ${win?"on":""}">🎄</div>
+  <h1>${win?"Разгадка найдена":"Ваша версия событий"}</h1>
+  <p>${esc(text)}</p>
+  <div class="st" id="s">${room?"Отправляю результат на табло…":"Результат не отправлен: нет номера комнаты."}</div>
+  <button id="rt" hidden>Отправить ещё раз</button>
+  <details><summary>Запасной код для ручного ввода</summary><div class="code">${code}</div></details>`;
+  if(!room)return;
+  const go=async()=>{
+    const s=document.getElementById("s"),b=document.getElementById("rt");
+    b.hidden=true;s.textContent="Отправляю результат на табло…";
+    const done=await send(p);
+    s.textContent=done?"Результат на табло. Ждите церемонию награждения!":"Не удалось отправить. Нажмите кнопку ещё раз или отдайте ведущему запасной код.";
+    b.hidden=done;
+  };
+  document.getElementById("rt").onclick=go;go();
+}
+
+for(let n=0;n<28;n++){const f=document.createElement("span");f.className="flake";f.textContent="❄";
+  f.style.left=Math.random()*100+"vw";f.style.fontSize=10+Math.random()*16+"px";
+  f.style.animationDuration=8+Math.random()*10+"s";f.style.animationDelay=-Math.random()*15+"s";document.body.appendChild(f)}
+home();
+</script>
+</body>
+</html>
